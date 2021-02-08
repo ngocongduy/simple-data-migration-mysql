@@ -255,7 +255,7 @@ def check_args(argv):
     day_format = "%Y-%m-%d"
 
     try:
-        opts, args = getopt.getopt(argv, "hs:c:e:j:", ["start=", "check=", "early-stop", "job"])
+        opts, args = getopt.getopt(argv, "hs:c:e:j:", ["start=", "check=", "early-stop=", "job="])
     except getopt.GetoptError:
         logger.info('test.py -s <start> -c <check> -e <early-stop> -j <job>')
         sys.exit(2)

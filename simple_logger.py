@@ -51,14 +51,16 @@ def get_logger():
     # c_handler.setLevel(logging.DEBUG)
     # f_handler.setLevel(logging.DEBUG)
     # Create formatters and add it to handlers
-    c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    c_handler.setFormatter(c_format)
+    # c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # c_handler.setFormatter(c_format)
+
     f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     f_handler.setFormatter(f_format)
 
     # Add handlers to the logger
     logger.addHandler(c_handler)
     logger.addHandler(f_handler)
+
     return logger, dir_dict
 
 def get_other_logger(name="query.logger"):
@@ -72,8 +74,12 @@ def get_other_logger(name="query.logger"):
         MESSAGING_LOG_FILE = os.path.join(dir_dict.get("log_dir"), "ack_log.log")
     elif name == "json.logger":
         MESSAGING_LOG_FILE = os.path.join(dir_dict.get("log_dir"), "jsn_log.log")
-    else:
+    elif name == "query.logger":
         MESSAGING_LOG_FILE = os.path.join(dir_dict.get("log_dir"), "ops_log.log")
+    elif name == "insert.logger":
+        MESSAGING_LOG_FILE = os.path.join(dir_dict.get("log_dir"), "ins_log.log")
+    else:
+        return None
     messaging_logger = logging.getLogger(name)
     messaging_logger.setLevel(LOG_LEVEL)
     messaging_logger_file_handler = FileHandler(MESSAGING_LOG_FILE)
