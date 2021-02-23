@@ -56,3 +56,4 @@ Thumbs.db
 /simple-data-migration-mysql.iml
 /.env
 /env.py
+/apis/

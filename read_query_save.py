@@ -61,18 +61,25 @@ def generate_log_file_path(file_name, file_path):
     return path_to_file
 
 
-def generate_data_file_path(batch_log_file_name, loan_app_id, process_instance_id, execution_id, file_path):
-    file_name = "{}_{}_{}_{}.json".format(batch_log_file_name, loan_app_id, process_instance_id, execution_id)
+def generate_data_file_path(batch_log_file_name, process_instance_id, file_path):
+    file_name = "{}_{}.json".format(batch_log_file_name, process_instance_id)
     path_to_file = os.path.join(file_path, file_name)
     return path_to_file
 
 
 def query_get_pid_and_save_csv(start_day, end_day, path_to_file):
+    # query_string = (
+    #     'select l.loan_application_id, l.process_instance_id, r.ID_, l.user_id, r.START_USER_ID_, r.BUSINESS_KEY_ from Workflow.ACT_RU_EXECUTION r '
+    #     'left join Workflow.los_user_loan_data l on r.PROC_INST_ID_ = l.process_instance_id '
+    #     "where l.application_stage != 'DISBURSED' and r.BUSINESS_KEY_ is not null "
+    #     "and l.modified >= %s and l.modified < %s ;"
+    # )
+
     query_string = (
-        'select l.loan_application_id, l.process_instance_id, r.ID_, l.user_id, r.START_USER_ID_, r.BUSINESS_KEY_ from Workflow.ACT_RU_EXECUTION r '
-        'left join Workflow.los_user_loan_data l on r.PROC_INST_ID_ = l.process_instance_id '
-        "where l.application_stage != 'DISBURSED' and r.BUSINESS_KEY_ is not null "
-        "and l.modified >= %s and l.modified < %s ;"
+        "select * from Workflow.los_user_loan_data "
+        "where journey='roboEsign' "
+        "and application_stage in ('NEW') "
+        "and modified >= %s and modified < %s ;"
     )
 
     rows, col_names = query(PROD_DB_CREDENTIAL, query_string, start_day, end_day)
@@ -110,7 +117,7 @@ def query_get_pid_and_save_csv(start_day, end_day, path_to_file):
     df.to_csv(path_to_file)
 
 
-def query_get_vars_to_json(process_instance_id, execution_id, loan_app_id, batch_log_file_name, start_day, end_day):
+def query_get_vars_to_json(process_instance_id, batch_log_file_name, start_day, end_day):
     query_string = (
         'select * from Workflow.ACT_RU_VARIABLE '
         "where PROC_INST_ID_ = %s ;"
@@ -134,7 +141,7 @@ def query_get_vars_to_json(process_instance_id, execution_id, loan_app_id, batch
         if not os.path.exists(directory):
             os.makedirs(directory)
         data_file_path = directory
-        path_to_file = generate_data_file_path(batch_log_file_name, loan_app_id, process_instance_id, execution_id,
+        path_to_file = generate_data_file_path(batch_log_file_name, process_instance_id,
                                                data_file_path)
 
         # df.to_json(path_to_file, force_ascii=False, orient="table", index=False) # Table-like json format
@@ -159,20 +166,22 @@ def read_csv_and_query_vars(start_day: str, end_day: str, file_path: str):
         logger.info("Process item number {}/{} in the batch".format(i + 1, num_of_rows))
         # Make sure that these id are integer
 
-        loan_app_id = int(df['loan_application_id'][i])
+        # loan_app_id = int(df['loan_application_id'][i])
+        # loan_pid = int(df['process_instance_id'][i])
+        # exec_id = int(df['ID_'][i])
+
         loan_pid = int(df['process_instance_id'][i])
-        exec_id = int(df['ID_'][i])
 
         try:
             # Additional check in case of retrieve on going job
             if df['is_get_vars'][i] in ['notFound', 'done']:
-                logger.info("This record with execution id {} might be dumped in json already.".format(exec_id))
+                logger.info("This record with pid {} might be dumped in json already.".format(loan_pid))
                 continue
 
-            file = query_get_vars_to_json(process_instance_id=loan_pid, execution_id=exec_id, loan_app_id=loan_app_id,
+            file = query_get_vars_to_json(process_instance_id=loan_pid,
                                           batch_log_file_name=file_name, start_day=start_day, end_day=end_day)
             if file is None:
-                logger.info("No variables for the execution {}".format(exec_id))
+                logger.info("No variables for the pid {}".format(loan_pid))
                 df['is_get_vars'][i] = 'notFound'
                 df['name_vars_file'][i] = 'done'
             elif os.path.exists(file):
@@ -180,7 +189,7 @@ def read_csv_and_query_vars(start_day: str, end_day: str, file_path: str):
                 df['is_get_vars'][i] = 'done'
             is_updated = True
         except Exception as e:
-            logger.info("Facing error for execution id".format(exec_id))
+            logger.info("Facing error for pid id".format(loan_pid))
             logger.debug("Exception {} ".format(e))
             return None
 
@@ -229,11 +238,14 @@ def read_log_and_check_upload(s3_log_file_path: str, batch_log_file_name: str, q
 
     is_found = False
     for k in range(len(query_log_df)):
-        loan_app_id = int(query_log_df['loan_application_id'][k])
+        # loan_app_id = int(query_log_df['loan_application_id'][k])
+        # loan_pid = int(query_log_df['process_instance_id'][k])
+        # exec_id = int(query_log_df['ID_'][k])
+
         loan_pid = int(query_log_df['process_instance_id'][k])
-        exec_id = int(query_log_df['ID_'][k])
+
         s3_bucket_name = "s3://my-test-upload-file-bucket"
-        generated_file_name = generate_data_file_path(batch_log_file_name, loan_app_id, loan_pid, exec_id,
+        generated_file_name = generate_data_file_path(batch_log_file_name, loan_pid,
                                                       s3_bucket_name)
         if generated_file_name in file_list:
             logger.info("Found {} in s3 upload log.".format(generated_file_name))
@@ -314,7 +326,7 @@ def check_args(argv):
 def main(argv):
 
     to_run_day, check_ongoing_job, upper_day_limit, job_name = check_args(argv)
-    step = 1
+    step = 10
     day_format = "%Y-%m-%d"
 
     # Business logic start from here
